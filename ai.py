@@ -84,7 +84,15 @@ def get_api_key():
     return api_key
 
 
-def build_prompt(user_request, count, genre, min_year, max_year):
+def build_similar_request(movie):
+    """Turn one recommended movie into a "more like this" request."""
+    return (
+        f"Movies similar to {movie['title']} ({movie['year']}), a {movie['genre']} film. "
+        f"Match its tone, themes, and style. About it: {movie['description']}"
+    )
+
+
+def build_prompt(user_request, count, genre, min_year, max_year, exclude_titles=None):
     """Combine the user's request and filters into one prompt for the model."""
     lines = [
         f'The user is looking for a movie. Their request: "{user_request.strip()}"',
@@ -99,6 +107,9 @@ def build_prompt(user_request, count, genre, min_year, max_year):
         lines.append(f"Every movie must be released in {min_year} or later.")
     elif max_year:
         lines.append(f"Every movie must be released in {max_year} or earlier.")
+    if exclude_titles:
+        listed = "; ".join(sorted(set(exclude_titles)))
+        lines.append(f"Do not recommend any of these, the user has already been shown them: {listed}.")
     lines.append("Order them from best match to weakest match.")
     return "\n".join(lines)
 
@@ -240,7 +251,7 @@ def validate_movie(item):
     return movie
 
 
-def validate_recommendations(data, count, min_year=None, max_year=None):
+def validate_recommendations(data, count, min_year=None, max_year=None, exclude_titles=None):
     """Check the parsed JSON and return a clean, de-duplicated list of movies."""
     if not isinstance(data, dict) or not isinstance(data.get("recommendations"), list):
         raise RecommendationError(
@@ -248,7 +259,7 @@ def validate_recommendations(data, count, min_year=None, max_year=None):
         )
 
     movies = []
-    seen_titles = set()
+    seen_titles = {title.casefold() for title in exclude_titles or []}
     for item in data["recommendations"]:
         movie = validate_movie(item)
         if movie is None:
@@ -273,13 +284,19 @@ def validate_recommendations(data, count, min_year=None, max_year=None):
     return movies[:count]
 
 
-def get_recommendations(user_request, count=5, genre="Any", min_year=None, max_year=None):
-    """Main entry point: validate input, ask the AI, and return clean results."""
+def get_recommendations(
+    user_request, count=5, genre="Any", min_year=None, max_year=None, exclude_titles=None
+):
+    """Main entry point: validate input, ask the AI, and return clean results.
+
+    `exclude_titles` keeps movies the user has already seen in this session (or
+    the seed movie for "more like this") out of the results.
+    """
     if not user_request or not user_request.strip():
         raise RecommendationError("Describe the kind of movie you want first.")
 
     api_key = get_api_key()
-    prompt = build_prompt(user_request, count, genre, min_year, max_year)
+    prompt = build_prompt(user_request, count, genre, min_year, max_year, exclude_titles)
     raw_text = call_ai(prompt, api_key)
     data = parse_json(raw_text)
-    return validate_recommendations(data, count, min_year, max_year)
+    return validate_recommendations(data, count, min_year, max_year, exclude_titles)
