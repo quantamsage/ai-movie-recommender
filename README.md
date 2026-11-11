@@ -1,8 +1,10 @@
 # 🎬 AI Movie Recommender
 
-A small Streamlit web app that turns a plain-English description of what you feel like watching into a short list of movie recommendations, each with a reason it fits and a match score. It is powered by the Google Gemini API (free tier).
+![Tests](https://github.com/quantamsage/ai-movie-recommender/actions/workflows/tests.yml/badge.svg)
 
-The project is intentionally simple: two Python files, three dependencies, no database, no accounts. It exists to show clean AI API integration in Python, including structured JSON output, response validation, and friendly error handling.
+A small Streamlit web app that turns a plain-English description of what you feel like watching into a short list of movie recommendations, each with a reason it fits and a match score. Found one you like? Ask for more like it, and keep a watchlist you can export. Powered by the Google Gemini API (free tier).
+
+The project is intentionally simple: a few small Python files, three dependencies, no database, no accounts. It shows clean AI API integration in Python, including structured JSON output, response validation, friendly error handling, and a tested core.
 
 ## Features
 
@@ -10,6 +12,8 @@ The project is intentionally simple: two Python files, three dependencies, no da
 - Choose 3, 5, or 10 recommendations
 - Optional genre filter and optional release-year range
 - Each recommendation shows title, year, genre, a short description, why it matches, and a 0–100 match score
+- **More like this:** one click on any card asks for films similar to that one, and skips everything you've already been shown this session
+- **Watchlist:** save picks to a sidebar list, remove them, and download the list as CSV
 - The AI is asked for structured JSON, which the app parses and validates before display
 - Duplicate titles, incomplete entries, and movies outside your year range are filtered out
 - Friendly messages for every common failure (missing or invalid key, rate limits, network problems, malformed AI output) instead of Python tracebacks
@@ -44,9 +48,13 @@ Actual recommendations vary from run to run.
 
 ```
 ai-movie-recommender/
-├── app.py            # Streamlit UI: inputs, button, movie cards, error display
-├── ai.py             # Prompt building, Gemini API call, JSON parsing and validation
-├── requirements.txt  # Python dependencies
+├── app.py               # Streamlit UI: inputs, movie cards, more-like-this, watchlist sidebar
+├── ai.py                # Prompt building, Gemini API call, JSON parsing and validation
+├── watchlist.py         # Watchlist add/remove/export (pure Python)
+├── tests/               # pytest suite (the AI is mocked, no API key needed)
+├── .github/workflows/   # CI: runs the tests on push and pull request
+├── requirements.txt     # App dependencies
+├── requirements-dev.txt # App + test dependencies
 ├── .env.example      # Template for your environment variables
 ├── .gitignore        # Keeps .env and other local files out of Git
 └── README.md
@@ -107,6 +115,15 @@ streamlit run app.py
 
 Streamlit opens the app in your browser (usually at http://localhost:8501).
 
+## Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The Gemini call is mocked, so the tests run offline with no API key.
+
 ## Example prompts
 
 - "A funny action movie with a smart main character, preferably from the last 10 years."
@@ -123,6 +140,7 @@ Streamlit opens the app in your browser (usually at http://localhost:8501).
 3. The reply is parsed as JSON. If the model wraps it in Markdown fences or adds stray text, the parser recovers the JSON object; if it still can't, you see a friendly error.
 4. Each movie is validated: required text fields must be present, the year must be a plausible integer, and the match score is clamped to 0–100. Duplicates and movies outside your year range are dropped, and the list is sorted by match score.
 5. `app.py` displays each movie as a card.
+6. **More like this** builds a new request from the chosen film's title, year, genre and description, and passes every title already shown as an exclusion list, both in the prompt and in validation, so you always get new picks.
 
 ## Error handling
 
@@ -146,8 +164,7 @@ Recommendations come from the model's training knowledge, not a live movie datab
 
 - Verify titles and years against a movie database API such as TMDB, and show posters
 - Show where each movie is available to stream
-- Let users regenerate a single recommendation or ask for "more like this one"
-- Add unit tests for the parsing and validation functions
+- Keep the watchlist between sessions
 - Deploy to Streamlit Community Cloud
 
 ## License
